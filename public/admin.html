@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EduBoost Admin</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: #f4f6f8; color: #222; padding: 16px; }
+  .wrap { max-width: 900px; margin: 0 auto; }
+  header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
+  h1 { font-size: 1.3rem; color: #0b3d2e; }
+  .card { background: #fff; border-radius: 10px; padding: 18px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+  .card h2 { font-size: 1rem; color: #0b3d2e; margin-bottom: 12px; border-bottom: 1px solid #eee; padding-bottom: 8px; }
+  input, textarea, select, button { font-family: inherit; font-size: .92rem; }
+  input, textarea, select { width: 100%; padding: 9px; border: 1px solid #ccc; border-radius: 6px; margin-bottom: 8px; }
+  button { padding: 9px 14px; border: none; border-radius: 6px; background: #008751; color: #fff; font-weight: bold; cursor: pointer; }
+  button.danger { background: #d32f2f; }
+  button.ghost { background: #eee; color: #333; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .row > * { flex: 1; min-width: 140px; }
+  table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+  th, td { padding: 8px; border-bottom: 1px solid #eee; text-align: left; }
+  th { background: #f9f9f9; color: #555; font-weight: 600; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: .7rem; font-weight: bold; }
+  .badge.pending { background: #fff3cd; color: #664d03; }
+  .badge.approved { background: #e8f5e9; color: #008751; }
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(140px,1fr)); gap: 10px; }
+  .stat { background: #f9f9f9; border-radius: 8px; padding: 12px; text-align: center; }
+  .stat b { display: block; font-size: 1.4rem; color: #008751; }
+  .stat span { font-size: .75rem; color: #666; }
+  .hidden { display: none; }
+  #loginMsg { color: #d32f2f; font-size: .85rem; margin-top: 6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- LOGIN -->
+  <div id="loginBox" class="card" style="max-width:380px;margin:60px auto;">
+    <h2>Admin Login</h2>
+    <input id="u" placeholder="Username" autocomplete="username">
+    <input id="p" type="password" placeholder="Password" autocomplete="current-password">
+    <button id="loginBtn" style="width:100%;">Login</button>
+    <p id="loginMsg"></p>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div id="dash" class="hidden">
+    <header>
+      <h1>EduBoost Admin</h1>
+      <button class="ghost" id="logoutBtn">Logout</button>
+    </header>
+
+    <div class="card">
+      <h2>Live Stats</h2>
+      <div class="stat-grid">
+        <div class="stat"><b id="stWeek">0</b><span>Joins this week</span></div>
+        <div class="stat"><b id="stTotal">0</b><span>Total joins</span></div>
+        <div class="stat"><b id="stDl">0</b><span>Downloads</span></div>
+        <div class="stat"><b id="st24">0</b><span>Clicks (24h)</span></div>
+        <div class="stat"><b id="stPending">0</b><span>Pending reviews</span></div>
+      </div>
+    </div>
+
+    <!-- REWARDS -->
+    <div class="card">
+      <h2>Upload Reward Content (Exam Questions / Answers / Syllabus)</h2>
+      <input id="rTitle" placeholder="Title e.g. JAMB 2024 Chemistry Past Questions">
+      <textarea id="rDesc" rows="2" placeholder="Short description"></textarea>
+      <div class="row">
+        <select id="rExam">
+          <option value="">Exam (optional)</option>
+          <option>WAEC</option><option>NECO</option><option>JAMB</option><option>Other</option>
+        </select>
+        <input id="rLink" placeholder="External link (optional, e.g. Google Drive)">
+      </div>
+      <input id="rFile" type="file" style="padding:6px;">
+      <button id="uploadRewardBtn" style="width:100%;margin-top:6px;">Upload Reward</button>
+      <p id="rMsg" style="font-size:.85rem;color:#008751;margin-top:6px;"></p>
+
+      <h2 style="margin-top:20px;">Existing Rewards</h2>
+      <table id="rewardTable">
+        <thead><tr><th>Title</th><th>Exam</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <!-- TESTIMONIALS -->
+    <div class="card">
+      <h2>Testimonials</h2>
+      <table id="testiTable">
+        <thead><tr><th>Name</th><th>Exam</th><th>Text</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+  </div>
+</div>
+
+<script src="js/admin.js"></script>
+</body>
+</html>
