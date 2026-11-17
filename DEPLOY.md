@@ -68,38 +68,49 @@ page should load with the yellow banner and the content list.
 
 ## 5. Move your existing content into Postgres
 
-Your old data lives in `edu.db` (SQLite) plus the images in `uploads/`. Run the
-one-time migration from your computer. `vercel` is not installed globally on this
-machine, so call it through `npx.cmd` (`npm.ps1` is blocked by the PowerShell
-execution policy here):
+Your old data lives in `edu.db` (SQLite) plus the images in `uploads/`. The
+migration runs on **your computer**, so it needs the same two secrets the
+deployment uses.
+
+### 5a. Create `.env.local` in the project root
+
+```ini
+DATABASE_URL=postgresql://...        # Vercel → Storage → your Neon database
+BLOB_READ_WRITE_TOKEN=vercel_blob_rw_...   # Vercel → Storage → your Blob store → .env.local tab
+SESSION_SECRET=any-long-random-string
+```
+
+`.env.local` is gitignored, so these secrets never reach GitHub.
+
+### 5b. Run the import
 
 ```powershell
 cd "C:\Users\KIMG JAY\Documents\Default Project\Examboost"
-
-# 1. log in (opens the browser once)
-npx.cmd vercel@latest login
-
-# 2. link this folder to the examboost project
-npx.cmd vercel@latest link
-
-# 3. pull the deployed env vars into .env.local
-npx.cmd vercel@latest env pull .env.local
-
-# 4. import: copies stats, testimonials, rewards and pushes images to Blob
 npm.cmd run import
 ```
 
-The app and the import script both read `.env.local` first, then `.env`, so no
-renaming is needed.
+The app and the script both read `.env.local` first, then `.env`.
 
-If `npx` also fails, do it by hand: create `.env.local` in the project root with
-the same three lines as `.env.example`, taking `DATABASE_URL` from the Neon
-console and `BLOB_READ_WRITE_TOKEN` from the Blob store page in Vercel.
+If you prefer not to copy secrets by hand, the Vercel CLI can do it — it just
+isn't installed here (`vercel` was not recognised):
+
+```powershell
+npx.cmd vercel@latest login
+npx.cmd vercel@latest link
+npx.cmd vercel@latest env pull .env.local
+```
+
+Call it as `npx.cmd`, not `npx` — the `npm.ps1`/`npx.ps1` shims are blocked by
+this machine's PowerShell execution policy.
 
 The script prints one line per reward and per uploaded file. Afterwards every
 `/uploads/...` path in the database becomes a `https://....public.blob.vercel-storage.com/...` URL.
 
-**Run it once.** Running it twice copies the rewards again as duplicates.
+**Run it once.** Two safeguards stop you from duplicating content:
+
+- it refuses to run without `BLOB_READ_WRITE_TOKEN` (images would 404 on Vercel),
+- it refuses to run if the `rewards` table already has rows, unless you add
+  `--force` (`npm.cmd run import -- --force`).
 
 ### Check what is missing at any time
 

@@ -19,10 +19,35 @@ for (const file of ['.env.local', '.env']) {
 const SQLITE_FILE = path.join(ROOT, 'edu.db');
 
 async function main() {
+  const force = process.argv.includes('--force');
+
   if (!process.env.DATABASE_URL) {
-    console.error('DATABASE_URL is missing. Add it to .env first.');
+    console.error([
+      'DATABASE_URL is missing.',
+      '',
+      'Create a file named .env.local in the project root containing:',
+      '  DATABASE_URL=postgresql://...',
+      '  BLOB_READ_WRITE_TOKEN=vercel_blob_rw_...',
+      '  SESSION_SECRET=any-long-random-string',
+      '',
+      'Or run:  npx.cmd vercel@latest env pull .env.local'
+    ].join('\n'));
     process.exit(1);
   }
+
+  if (!process.env.BLOB_READ_WRITE_TOKEN) {
+    console.error([
+      'BLOB_READ_WRITE_TOKEN is missing.',
+      '',
+      'Without it the images would be copied as "/uploads/..." paths that only',
+      'exist on this computer — they would 404 on Vercel. Add the token to',
+      '.env.local (Vercel → Storage → your Blob store → .env.local tab).',
+      '',
+      'If you really want a local-only import, re-run with:  --force'
+    ].join('\n'));
+    if (!force) process.exit(1);
+  }
+
   if (!fs.existsSync(SQLITE_FILE)) {
     console.error('No edu.db found — nothing to import.');
     process.exit(1);
@@ -30,6 +55,17 @@ async function main() {
 
   const { pool, init } = require('../db');
   await init();
+
+  // Guard against running twice and duplicating every reward
+  const { rows: existing } = await pool.query('SELECT COUNT(*)::int AS c FROM rewards');
+  if (existing[0].c > 0 && !force) {
+    console.error(
+      `The database already holds ${existing[0].c} reward(s). Importing again would ` +
+      'create duplicates.\nNothing was changed. Re-run with --force if you are sure.'
+    );
+    await pool.end();
+    process.exit(1);
+  }
 
   const sqlite = new DatabaseSync(SQLITE_FILE, { readOnly: true });
   const all = sql => { try { return sqlite.prepare(sql).all(); } catch (e) { return []; } };
