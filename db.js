@@ -31,6 +31,16 @@ db.exec(`
   );
 `);
 
+// migration: rewards can hold up to 30 attachments as a JSON array
+const rewardCols = db.prepare('PRAGMA table_info(rewards)').all().map(c => c.name);
+if (!rewardCols.includes('images')) {
+  db.exec("ALTER TABLE rewards ADD COLUMN images TEXT");
+  db.exec("UPDATE rewards SET images = json_array(file_path) WHERE images IS NULL AND file_path IS NOT NULL");
+}
+if (!rewardCols.includes('slug')) {
+  db.exec("ALTER TABLE rewards ADD COLUMN slug TEXT");
+}
+
 // seed stats
 const seed = db.prepare('INSERT OR IGNORE INTO stats (key,value) VALUES (?,?)');
 seed.run('week_joins', 0);

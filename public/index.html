@@ -9,6 +9,8 @@
   body { font-family: 'Segoe UI', Arial, sans-serif; background: #0b3d2e; color: #fff; min-height: 100vh; }
   .top-banner { background: #ffcc00; color: #000; text-align: center; padding: 12px; font-weight: bold; font-size: .95rem; position: sticky; top: 0; z-index: 100; border-bottom: 4px solid #000; }
   .container { max-width: 540px; margin: 0 auto; padding: 20px; }
+  .cover { margin-bottom: 18px; border-radius: 14px; overflow: hidden; box-shadow: 0 6px 20px rgba(0,0,0,.45); }
+  .cover img { display: block; width: 100%; height: auto; }
   .flag { text-align: center; font-size: 2rem; margin: 10px 0; }
   h1 { text-align: center; font-size: 1.4rem; background: linear-gradient(90deg,#008751,#fff,#008751); -webkit-background-clip: text; background-clip: text; color: transparent; font-weight: 900; margin-bottom: 8px; }
   .tagline { text-align: center; color: #ffd700; font-weight: bold; font-size: 1.05rem; margin-bottom: 20px; }
@@ -32,6 +34,14 @@
   .reward-item h4 { font-size: .95rem; color: #0b3d2e; margin-bottom: 4px; }
   .reward-item p { font-size: .82rem; color: #555; margin-bottom: 8px; }
   .reward-item a { display: inline-block; background: #008751; color: #fff; padding: 6px 12px; border-radius: 6px; font-size: .8rem; text-decoration: none; font-weight: bold; }
+  .thumbs { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
+  .thumbs a { display: block; padding: 0; background: none; line-height: 0; }
+  .thumbs img { width: 72px; height: 72px; object-fit: cover; border-radius: 6px; border: 1px solid #e0e0e0; }
+  .content-link { display: block; padding: 12px 14px; margin: 8px 0; border: 1px solid #e0e0e0; border-radius: 10px; background: #fafafa; text-decoration: none; color: #0b3d2e; transition: background .15s, border-color .15s; }
+  .content-link:hover { background: #eef7f2; border-color: #008751; }
+  .content-link span { display: block; font-weight: bold; font-size: .92rem; margin-bottom: 2px; }
+  .content-link small { color: #008751; font-size: .75rem; font-weight: bold; }
+  .content-link::after { content: '→'; float: right; color: #008751; font-weight: bold; margin-top: -22px; }
   .note { font-size: .78rem; color: #888; text-align: center; margin-top: 8px; }
   .trust { text-align: center; font-size: .75rem; color: #cfd8d3; margin-top: 10px; }
 </style>
@@ -41,6 +51,9 @@
 <div class="top-banner">🎓 FREE WAEC / NECO / JAMB PREP MATERIAL — 100% LEGITIMATE EDUCATIONAL SERVICE</div>
 
 <div class="container">
+  <div class="cover">
+    <img src="cover.jpg" alt="Success Academy — Study Smart, Score High. Free WAEC, NECO, JAMB, POST UTME, JUPEB & NABTEB prep material.">
+  </div>
   <div class="flag">🇳🇬</div>
   <h1>EduBoost Exam Prep Giveaway</h1>
   <p class="tagline">Free past questions, answers & syllabus breakdowns</p>
@@ -70,9 +83,11 @@
   <div class="card">
     <span class="tactic-tag">STEP 2 — SHARE WITH FRIENDS</span>
     <p style="font-size:.9rem;color:#333;margin-bottom:12px;">
-      Share this page with classmates so they also get free prep material. The more people join, the more free content we unlock for everyone.
+      Share this page to 5 groups, friends &amp; classmates so they also get free questions prep material. The more people join, the more free content we unlock for everyone.
     </p>
     <button class="btn btn-secondary" id="shareBtn">↗ Share with Classmates</button>
+    <div class="progress-track" style="margin-top:14px;"><div class="progress-fill" id="shareBar"></div></div>
+    <p id="shareProgressText" style="text-align:center;font-size:.85rem;font-weight:bold;color:#0b3d2e;margin-top:2px;">0 of 5 shares — 0%</p>
     <p class="note">Share opens your device's share sheet / WhatsApp.</p>
   </div>
 
@@ -103,7 +118,10 @@
     <textarea id="tText" placeholder="Your experience…" rows="3" style="width:100%;padding:10px;border:1px solid #ccc;border-radius:6px;margin-bottom:8px;"></textarea>
     <select id="tExam" style="width:100%;padding:10px;border:1px solid #ccc;border-radius:6px;margin-bottom:10px;">
       <option value="">Exam (optional)</option>
-      <option>WAEC</option><option>NECO</option><option>JAMB</option><option>Other</option>
+      <option>WAEC</option><option>NECO</option><option>JAMB</option>
+      <option>POST-UTME</option><option>NECO GCE</option><option>WAEC GCE</option>
+      <option>NABTEB</option><option>JUPEB</option><option>IJMB</option>
+      <option>BECE</option><option>Unified</option><option>Other</option>
     </select>
     <button class="btn btn-secondary" id="submitTestimonial">Submit for Review</button>
     <p class="note" id="tMsg"></p>

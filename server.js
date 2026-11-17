@@ -7,10 +7,30 @@ const fs = require('fs');
 const db = require('./db');
 
 const app = express();
-const upload = multer({ dest: 'uploads/' });
+const MAX_REWARD_FILES = 30;
+const UPLOAD_DIR = path.join(__dirname, 'uploads');
+fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, UPLOAD_DIR),
+  filename: (req, file, cb) => {
+    const raw = path.extname(file.originalname || '');
+    const ext = /^\.[a-z0-9]{1,6}$/i.test(raw) ? raw.toLowerCase() : '';
+    cb(null, Date.now() + '-' + Math.random().toString(16).slice(2, 10) + ext);
+  }
+});
+
+const upload = multer({
+  storage,
+  limits: {
+    fileSize: 50 * 1024 * 1024,      // 50 MB per file
+    files: MAX_REWARD_FILES,          // 30 files per upload
+    fieldSize: 10 * 1024 * 1024       // 10 MB per text field (long descriptions)
+  }
+});
+
+app.use(express.json({ limit: '5mb' }));
+app.use(express.urlencoded({ extended: true, limit: '5mb' }));
 app.use(session({
   secret: process.env.SESSION_SECRET || 'change-this-in-prod',
   resave: false,
@@ -75,9 +95,62 @@ app.post('/api/testimonials', (req, res) => {
 });
 
 /* ---------- REWARDS (public read, admin write) ---------- */
+// A reward can carry up to 30 attachments stored as a JSON array in rewards.images
+function withImages(row) {
+  if (!row) return row;
+  let images = [];
+  if (row.images) { try { images = JSON.parse(row.images) || []; } catch (e) { images = []; } }
+  if (!Array.isArray(images)) images = [];
+  if (!images.length && row.file_path) images = [row.file_path];
+  return { ...row, images };
+}
+function unlinkFiles(list) {
+  (list || []).forEach(p => { if (p) fs.unlink(path.join(__dirname, p), () => {}); });
+}
+
+/* ---------- PERMALINK SLUGS ---------- */
+function slugify(s) {
+  return String(s || '')
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80) || 'content';
+}
+function uniqueSlug(base, excludeId) {
+  let slug = base, i = 2;
+  for (;;) {
+    const row = db.prepare('SELECT id FROM rewards WHERE slug=?').get(slug);
+    if (!row || row.id === excludeId) return slug;
+    slug = `${base}-${i++}`;
+  }
+}
+// Give every existing reward a permalink on startup
+for (const r of db.prepare("SELECT id,title FROM rewards WHERE slug IS NULL OR slug=''").all()) {
+  db.prepare('UPDATE rewards SET slug=? WHERE id=?').run(uniqueSlug(slugify(r.title)), r.id);
+}
+
+// Public list: names only (the full content lives on the permalink page)
 app.get('/api/rewards', (req, res) => {
-  res.json(db.prepare('SELECT id,title,description,exam,file_path,link FROM rewards WHERE active=1 ORDER BY id DESC').all());
+  res.json(db.prepare('SELECT * FROM rewards WHERE active=1 ORDER BY id DESC').all()
+    .map(withImages)
+    .map(r => ({
+      id: r.id,
+      title: r.title,
+      exam: r.exam,
+      slug: r.slug,
+      files: r.images.length,
+      created_at: r.created_at
+    })));
 });
+
+// Public detail for one piece of content
+app.get('/api/rewards/:slug', (req, res) => {
+  const row = db.prepare('SELECT * FROM rewards WHERE slug=? AND active=1').get(req.params.slug);
+  if (!row) return res.status(404).json({ error: 'Not found' });
+  res.json(withImages(row));
+});
+
 app.post('/api/reward-download', (req, res) => {
   db.prepare('UPDATE stats SET value=value+1 WHERE key=?').run('reward_downloads');
   res.json({ ok: true });
@@ -98,6 +171,19 @@ app.patch('/api/admin/testimonials/:id', requireAdmin, (req, res) => {
   db.prepare('UPDATE testimonials SET approved=? WHERE id=?').run(approved ? 1 : 0, req.params.id);
   res.json({ ok: true });
 });
+app.put('/api/admin/testimonials/:id', requireAdmin, (req, res) => {
+  const row = db.prepare('SELECT * FROM testimonials WHERE id=?').get(req.params.id);
+  if (!row) return res.status(404).json({ error: 'Not found' });
+  const { name, text, exam, approved } = req.body;
+  db.prepare('UPDATE testimonials SET name=?, text=?, exam=?, approved=? WHERE id=?').run(
+    name === undefined ? row.name : name,
+    text === undefined ? row.text : text,
+    exam === undefined ? row.exam : (exam || null),
+    approved === undefined ? row.approved : (approved ? 1 : 0),
+    req.params.id
+  );
+  res.json({ ok: true });
+});
 app.delete('/api/admin/testimonials/:id', requireAdmin, (req, res) => {
   db.prepare('DELETE FROM testimonials WHERE id=?').run(req.params.id);
   res.json({ ok: true });
@@ -105,23 +191,77 @@ app.delete('/api/admin/testimonials/:id', requireAdmin, (req, res) => {
 
 /* ---------- ADMIN: REWARDS ---------- */
 app.get('/api/admin/rewards', requireAdmin, (req, res) => {
-  res.json(db.prepare('SELECT * FROM rewards ORDER BY id DESC').all());
+  res.json(db.prepare('SELECT * FROM rewards ORDER BY id DESC').all().map(withImages));
 });
-app.post('/api/admin/rewards', requireAdmin, upload.single('file'), (req, res) => {
+
+// Upload a new reward with up to 30 files
+app.post('/api/admin/rewards', requireAdmin, upload.array('files', MAX_REWARD_FILES), (req, res) => {
   const { title, description, exam, link } = req.body;
-  const file_path = req.file ? '/uploads/' + req.file.filename : null;
-  const r = db.prepare('INSERT INTO rewards (title,description,exam,file_path,link,active) VALUES (?,?,?,?,?,1)')
-    .run(title, description || null, exam || null, file_path, link || null);
-  res.json({ id: r.lastInsertRowid });
+  if (!title) return res.status(400).json({ error: 'title required' });
+  const files = (req.files || []).map(f => '/uploads/' + f.filename);
+  const slug = uniqueSlug(slugify(title));
+  const r = db.prepare('INSERT INTO rewards (title,description,exam,file_path,link,active,images,slug) VALUES (?,?,?,?,?,1,?,?)')
+    .run(title, description || null, exam || null, files[0] || null, link || null, JSON.stringify(files), slug);
+  res.json({ id: r.lastInsertRowid, images: files, slug });
 });
+
+// Edit any text field of a reward (description has no length limit)
+app.put('/api/admin/rewards/:id', requireAdmin, (req, res) => {
+  const row = db.prepare('SELECT * FROM rewards WHERE id=?').get(req.params.id);
+  if (!row) return res.status(404).json({ error: 'Not found' });
+  const { title, description, exam, link, slug } = req.body;
+  const newSlug = slug === undefined || slug === null || String(slug).trim() === ''
+    ? row.slug
+    : uniqueSlug(slugify(slug), row.id);
+  db.prepare('UPDATE rewards SET title=?, description=?, exam=?, link=?, slug=? WHERE id=?').run(
+    title === undefined ? row.title : title,
+    description === undefined ? row.description : (description || null),
+    exam === undefined ? row.exam : (exam || null),
+    link === undefined ? row.link : (link || null),
+    newSlug,
+    req.params.id
+  );
+  res.json({ ok: true, slug: newSlug });
+});
+
+// Add more attachments to an existing reward (total capped at 30)
+app.post('/api/admin/rewards/:id/images', requireAdmin, upload.array('files', MAX_REWARD_FILES), (req, res) => {
+  const row = db.prepare('SELECT * FROM rewards WHERE id=?').get(req.params.id);
+  if (!row) { unlinkFiles((req.files || []).map(f => '/uploads/' + f.filename)); return res.status(404).json({ error: 'Not found' }); }
+  const current = withImages(row).images;
+  const incoming = (req.files || []).map(f => '/uploads/' + f.filename);
+  const allowed = Math.max(0, MAX_REWARD_FILES - current.length);
+  const merged = current.concat(incoming.slice(0, allowed));
+  const ignored = incoming.length - Math.min(incoming.length, allowed);
+  if (ignored > 0) unlinkFiles(incoming.slice(allowed));
+  db.prepare('UPDATE rewards SET images=?, file_path=COALESCE(file_path, ?) WHERE id=?')
+    .run(JSON.stringify(merged), merged[0] || null, req.params.id);
+  res.json({ ok: true, images: merged, count: merged.length, ignored });
+});
+
+// Remove one attachment from a reward
+app.delete('/api/admin/rewards/:id/images/:index', requireAdmin, (req, res) => {
+  const row = db.prepare('SELECT * FROM rewards WHERE id=?').get(req.params.id);
+  if (!row) return res.status(404).json({ error: 'Not found' });
+  const images = withImages(row).images;
+  const i = parseInt(req.params.index, 10);
+  if (!(i >= 0 && i < images.length)) return res.status(400).json({ error: 'Bad index' });
+  const [removed] = images.splice(i, 1);
+  unlinkFiles([removed]);
+  db.prepare('UPDATE rewards SET images=?, file_path=? WHERE id=?')
+    .run(JSON.stringify(images), images[0] || null, req.params.id);
+  res.json({ ok: true, images });
+});
+
 app.patch('/api/admin/rewards/:id', requireAdmin, (req, res) => {
   const { active } = req.body;
   db.prepare('UPDATE rewards SET active=? WHERE id=?').run(active ? 1 : 0, req.params.id);
   res.json({ ok: true });
 });
+
 app.delete('/api/admin/rewards/:id', requireAdmin, (req, res) => {
-  const row = db.prepare('SELECT file_path FROM rewards WHERE id=?').get(req.params.id);
-  if (row?.file_path) fs.unlink(path.join(__dirname, row.file_path), () => {});
+  const row = db.prepare('SELECT * FROM rewards WHERE id=?').get(req.params.id);
+  if (row) unlinkFiles(withImages(row).images);
   db.prepare('DELETE FROM rewards WHERE id=?').run(req.params.id);
   res.json({ ok: true });
 });
@@ -136,6 +276,25 @@ app.get('/api/admin/stats', requireAdmin, (req, res) => {
     pending_testimonials: db.prepare('SELECT COUNT(*) c FROM testimonials WHERE approved=0').get().c,
     join_clicks_24h: db.prepare("SELECT COUNT(*) c FROM join_clicks WHERE created_at > datetime('now','-1 day')").get().c
   });
+});
+
+/* ---------- PUBLIC PERMALINK PAGE: domain.com/necogce-maths ---------- */
+app.get('/:slug', (req, res, next) => {
+  const slug = req.params.slug;
+  if (!/^[a-z0-9-]{1,80}$/.test(slug)) return next();
+  const row = db.prepare('SELECT id FROM rewards WHERE slug=? AND active=1').get(slug);
+  if (!row) return next();
+  res.sendFile(path.join(__dirname, 'public', 'reward.html'));
+});
+
+/* ---------- ERROR HANDLING (uploads, oversized fields) ---------- */
+app.use((err, req, res, next) => {
+  if (err && err.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ error: 'A file is larger than 50 MB.' });
+  if (err && err.code === 'LIMIT_FILE_COUNT') return res.status(400).json({ error: `Too many files — ${MAX_REWARD_FILES} maximum.` });
+  if (err && err.code === 'LIMIT_FIELD_VALUE') return res.status(413).json({ error: 'A text field is too large.' });
+  if (err && err.code === 'LIMIT_UNEXPECTED_FILE') return res.status(400).json({ error: 'Unexpected file field.' });
+  if (err) return res.status(500).json({ error: err.message || 'Server error' });
+  next();
 });
 
 const PORT = process.env.PORT || 3000;

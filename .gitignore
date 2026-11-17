@@ -1,0 +1,21 @@
+# dependencies
+node_modules/
+
+# local database
+edu.db
+edu.db-journal
+*.db
+*.db-journal
+
+# uploaded reward files
+uploads/
+
+# environment / secrets
+.env
+.env.*
+
+# logs and OS clutter
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db

@@ -29,8 +29,28 @@
   .stat { background: #f9f9f9; border-radius: 8px; padding: 12px; text-align: center; }
   .stat b { display: block; font-size: 1.4rem; color: #008751; }
   .stat span { font-size: .75rem; color: #666; }
-  .hidden { display: none; }
+  .hidden { display: none !important; }
   #loginMsg { color: #d32f2f; font-size: .85rem; margin-top: 6px; }
+  .hint { font-size: .78rem; color: #777; margin: 2px 0 4px; }
+  .thumb { width: 56px; height: 56px; object-fit: cover; border-radius: 6px; border: 1px solid #ddd; background: #fafafa; display: block; }
+  .thumb-file { width: 56px; height: 56px; border-radius: 6px; border: 1px dashed #bbb; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; background: #fafafa; }
+  .asset-grid { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 10px; }
+  .asset { position: relative; }
+  .asset button { position: absolute; top: -6px; right: -6px; padding: 0; width: 20px; height: 20px; line-height: 18px; border-radius: 50%; background: #d32f2f; font-size: .75rem; }
+  .modal { position: fixed; inset: 0; background: rgba(0,0,0,.5); display: flex; align-items: flex-start; justify-content: center; padding: 24px 12px; overflow: auto; z-index: 100; }
+  .modal-card { background: #fff; border-radius: 10px; padding: 18px; width: 100%; max-width: 640px; box-shadow: 0 10px 30px rgba(0,0,0,.3); }
+  .modal-card h2 { font-size: 1rem; color: #0b3d2e; margin-bottom: 12px; }
+  .modal-actions { display: flex; gap: 8px; margin-top: 10px; }
+  .modal-actions button { flex: 1; }
+  label.chk { display: flex; align-items: center; gap: 8px; font-size: .9rem; margin-bottom: 10px; }
+  label.chk input { width: auto; margin: 0; }
+  td.desc { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .permalink { font-family: Consolas, monospace; font-size: .78rem; color: #008751; text-decoration: none; word-break: break-all; }
+  .permalink:hover { text-decoration: underline; }
+  .copy { padding: 3px 7px; font-size: .7rem; margin-left: 4px; }
+  .slug-row { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+  .slug-row .prefix { font-size: .85rem; color: #666; white-space: nowrap; }
+  .slug-row input { margin-bottom: 0; }
 </style>
 </head>
 <body>
@@ -67,21 +87,33 @@
     <div class="card">
       <h2>Upload Reward Content (Exam Questions / Answers / Syllabus)</h2>
       <input id="rTitle" placeholder="Title e.g. JAMB 2024 Chemistry Past Questions">
-      <textarea id="rDesc" rows="2" placeholder="Short description"></textarea>
+      <textarea id="rDesc" rows="5" placeholder="Short description (any length — write as much as you need)"></textarea>
       <div class="row">
         <select id="rExam">
           <option value="">Exam (optional)</option>
-          <option>WAEC</option><option>NECO</option><option>JAMB</option><option>Other</option>
+          <option>WAEC</option>
+          <option>NECO</option>
+          <option>JAMB</option>
+          <option>POST-UTME</option>
+          <option>NECO GCE</option>
+          <option>WAEC GCE</option>
+          <option>NABTEB</option>
+          <option>JUPEB</option>
+          <option>IJMB</option>
+          <option>BECE</option>
+          <option>Unified</option>
+          <option>Other</option>
         </select>
         <input id="rLink" placeholder="External link (optional, e.g. Google Drive)">
       </div>
-      <input id="rFile" type="file" style="padding:6px;">
+      <input id="rFile" type="file" multiple style="padding:6px;">
+      <p class="hint">Select up to 30 files (images, PDFs and other documents). Hold Ctrl / Shift to pick several at once.</p>
       <button id="uploadRewardBtn" style="width:100%;margin-top:6px;">Upload Reward</button>
       <p id="rMsg" style="font-size:.85rem;color:#008751;margin-top:6px;"></p>
 
       <h2 style="margin-top:20px;">Existing Rewards</h2>
       <table id="rewardTable">
-        <thead><tr><th>Title</th><th>Exam</th><th>Status</th><th>Actions</th></tr></thead>
+        <thead><tr><th>Title</th><th>Exam</th><th>Files</th><th>Status</th><th>Link</th><th>Actions</th></tr></thead>
         <tbody></tbody>
       </table>
     </div>
@@ -95,6 +127,19 @@
       </table>
     </div>
 
+  </div>
+</div>
+
+<!-- EDIT MODAL -->
+<div id="modal" class="modal hidden">
+  <div class="modal-card">
+    <h2 id="modalTitle">Edit</h2>
+    <div id="modalBody"></div>
+    <div class="modal-actions">
+      <button id="modalSave">Save changes</button>
+      <button class="ghost" id="modalCancel">Cancel</button>
+    </div>
+    <p id="modalMsg" style="font-size:.85rem;color:#008751;margin-top:8px;"></p>
   </div>
 </div>
 

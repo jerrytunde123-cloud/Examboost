@@ -1,24 +1,43 @@
-const WA_CHANNEL_URL = 'https://whatsapp.com/channel/REPLACE_WITH_YOUR_CHANNEL_ID';
+const WA_CHANNEL_URL = 'https://whatsapp.com/channel/0029VbDKKpk6LwHkzWvLyk3e';
+const SHARE_GOAL = 5; // shares needed before the "Share" step counts as done
 
 const state = {
   joined: localStorage.getItem('eb_joined') === '1',
-  shared: localStorage.getItem('eb_shared') === '1'
+  shares: Math.min(SHARE_GOAL, parseInt(localStorage.getItem('eb_shares'), 10) || 0)
 };
+
+function sharesComplete() { return state.shares >= SHARE_GOAL; }
+
+function setShareProgress() {
+  const pct = Math.round((state.shares / SHARE_GOAL) * 100);
+  const bar = document.getElementById('shareBar');
+  const txt = document.getElementById('shareProgressText');
+  if (bar) bar.style.width = pct + '%';
+  if (txt) {
+    txt.textContent = pct >= 100
+      ? '✅ Share complete — thank you!'
+      : `${state.shares} of ${SHARE_GOAL} shares — ${pct}%`;
+    txt.style.color = pct >= 100 ? '#008751' : '#0b3d2e';
+  }
+}
 
 function setProgress() {
   const bar = document.getElementById('progressBar');
   const txt = document.getElementById('progressText');
   const s1 = document.getElementById('s1'), s2 = document.getElementById('s2'), s3 = document.getElementById('s3');
+  const shared = sharesComplete();
   let pct = 0;
   s1.classList.toggle('active', true);
-  s2.classList.toggle('active', state.shared);
-  s3.classList.toggle('active', state.joined && state.shared);
+  s2.classList.toggle('active', shared);
+  s3.classList.toggle('active', state.joined && shared);
   if (state.joined) pct += 40;
-  if (state.shared) pct += 40;
-  if (state.joined && state.shared) pct = 100;
+  if (shared) pct += 40;
+  if (state.joined && shared) pct = 100;
   bar.style.width = pct + '%';
   if (pct === 0) txt.textContent = 'Not started';
-  else if (pct === 40) txt.textContent = state.joined ? 'Joined ✓ — now share to unlock' : 'Shared ✓ — now join to unlock';
+  else if (pct === 40) txt.textContent = state.joined
+    ? `Joined ✓ — now share ${SHARE_GOAL} times to unlock`
+    : `Shared ✓ — now join to unlock`;
   else if (pct === 80) txt.textContent = 'Almost there…';
   else { txt.textContent = '✅ All steps complete — reward unlocked!'; loadRewards(); }
 }
@@ -47,23 +66,37 @@ function animateNumber(id, target) {
   requestAnimationFrame(tick);
 }
 
-document.getElementById('joinWaBtn').addEventListener('click', async () => {
+document.getElementById('joinWaBtn').addEventListener('click', () => {
   state.joined = true; localStorage.setItem('eb_joined', '1');
   setProgress();
-  try { await fetch('/api/join-click', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ source: 'landing_wa' }) }); } catch(e){}
-  window.open(WA_CHANNEL_URL, '_blank');
-  refreshStats();
+  // Open immediately, still inside the user gesture, so popup blockers don't kill it
+  window.open(WA_CHANNEL_URL, '_blank', 'noopener');
+  fetch('/api/join-click', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ source: 'landing_wa' }) })
+    .catch(() => {}).finally(refreshStats);
 });
 
+const SHARE_TEXT = [
+  '📚 Free WAEC/NECO/JAMB — join our WhatsApp channel for REAL questions & study guides.',
+  '',
+  `👉 Channel: ${WA_CHANNEL_URL}`,
+  '',
+  'Or learn more:',
+  location.origin + '/',
+  '',
+  'Join our channel for weekly free giveaway(#50k) & challenges'
+].join('\n');
+
 document.getElementById('shareBtn').addEventListener('click', async () => {
-  state.shared = true; localStorage.setItem('eb_shared', '1');
+  if (!sharesComplete()) {
+    state.shares = Math.min(SHARE_GOAL, state.shares + 1);
+    localStorage.setItem('eb_shares', state.shares);
+  }
+  setShareProgress();
   setProgress();
-  const url = location.href;
-  const text = 'Free WAEC/NECO/JAMB prep materials — join here:';
   if (navigator.share) {
-    try { await navigator.share({ title: 'EduBoost', text, url }); } catch(e){}
+    try { await navigator.share({ title: 'EduBoost — Free Exam Prep', text: SHARE_TEXT }); } catch(e){}
   } else {
-    window.open('https://wa.me/?text=' + encodeURIComponent(text + ' ' + url), '_blank');
+    window.open('https://wa.me/?text=' + encodeURIComponent(SHARE_TEXT), '_blank', 'noopener');
   }
 });
 
@@ -82,16 +115,17 @@ async function loadRewards() {
     const r = await fetch('/api/rewards'); const list = await r.json();
     const box = document.getElementById('rewardContent');
     box.innerHTML = list.length
-      ? list.map(x => `
-        <div class="reward-item">
-          <h4>${esc(x.title)} ${x.exam?`<span class="exam">${esc(x.exam)}</span>`:''}</h4>
-          <p>${esc(x.description||'')}</p>
-          ${x.file_path?`<a href="${x.file_path}" target="_blank" onclick="trackDownload()">📄 Download</a> `:''}
-          ${x.link?`<a href="${esc(x.link)}" target="_blank" onclick="trackDownload()">🔗 Open Link</a>`:''}
-        </div>`).join('')
-      : '<p class="note">No rewards uploaded yet. Check back soon.</p>';
-  } catch(e) { document.getElementById('rewardContent').innerHTML = '<p class="note">Could not load rewards.</p>'; }
+      ? `<p class="note" style="text-align:left;margin-bottom:10px;">${list.length} content pack${list.length > 1 ? 's' : ''} available — tap one to open it.</p>`
+        + list.map(x => `
+          <a class="content-link" href="/${esc(x.slug)}">
+            <span>${esc(x.title)}</span>
+            <small>${[x.exam, x.files ? `${x.files} file${x.files > 1 ? 's' : ''}` : ''].filter(Boolean).map(esc).join(' · ')}</small>
+          </a>`).join('')
+      : '<p class="note">No content uploaded yet. Check back soon.</p>';
+  } catch(e) { document.getElementById('rewardContent').innerHTML = '<p class="note">Could not load content.</p>'; }
 }
+
+function isImage(src) { return /\.(jpe?g|png|gif|webp|bmp|svg)$/i.test(src || ''); }
 
 async function trackDownload() {
   try { await fetch('/api/reward-download', { method:'POST' }); refreshStats(); } catch(e){}
@@ -114,6 +148,7 @@ document.getElementById('submitTestimonial').addEventListener('click', async () 
 function esc(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 // init
+setShareProgress();
 setProgress();
 refreshStats(); loadTestimonials();
 setInterval(refreshStats, 15000);
