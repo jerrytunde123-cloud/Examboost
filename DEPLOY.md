@@ -28,6 +28,10 @@ If you prefer Supabase or a self-hosted Postgres, any standard connection string
 postgresql://user:password@host/dbname?sslmode=require
 ```
 
+If Neon gives you two strings, prefer the **pooled** one (the host contains
+`-pooler`). Vercel runs many short-lived function instances, and pooling keeps
+you inside the free-tier connection limit.
+
 The tables are created automatically on the first request — no SQL to run by hand.
 
 ## 2. Create the Blob store
