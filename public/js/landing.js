@@ -2,9 +2,23 @@ const WA_CHANNEL_URL = 'https://whatsapp.com/channel/0029VbDKKpk6LwHkzWvLyk3e';
 const SHARE_GOAL = 5; // shares needed before the "Share" step counts as done
 
 const state = {
-  joined: localStorage.getItem('eb_joined') === '1',
-  shares: Math.min(SHARE_GOAL, parseInt(localStorage.getItem('eb_shares'), 10) || 0)
+  joined: false,
+  shares: 0
 };
+
+// The server keeps task progress in the session, so the same person who
+// finishes the tasks here can open /<slug> without repeating them.
+function applyTasks(s) {
+  state.joined = !!s.joined;
+  state.shares = Math.min(SHARE_GOAL, Number(s.shares) || 0);
+}
+
+async function syncTasks() {
+  try {
+    const r = await fetch('/api/unlock');
+    if (r.ok) applyTasks(await r.json());
+  } catch (e) { /* offline: keep current state */ }
+}
 
 function sharesComplete() { return state.shares >= SHARE_GOAL; }
 
@@ -66,13 +80,16 @@ function animateNumber(id, target) {
   requestAnimationFrame(tick);
 }
 
-document.getElementById('joinWaBtn').addEventListener('click', () => {
-  state.joined = true; localStorage.setItem('eb_joined', '1');
-  setProgress();
+document.getElementById('joinWaBtn').addEventListener('click', async () => {
   // Open immediately, still inside the user gesture, so popup blockers don't kill it
   window.open(WA_CHANNEL_URL, '_blank', 'noopener');
-  fetch('/api/join-click', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ source: 'landing_wa' }) })
-    .catch(() => {}).finally(refreshStats);
+  state.joined = true;
+  setProgress();
+  try {
+    const r = await fetch('/api/join-click', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ source: 'landing_wa' }) });
+    if (r.ok) { applyTasks(await r.json()); setProgress(); }
+  } catch (e) { /* offline */ }
+  refreshStats();
 });
 
 const SHARE_TEXT = [
@@ -86,19 +103,26 @@ const SHARE_TEXT = [
   'Join our channel for weekly free giveaway(#50k) & challenges'
 ].join('\n');
 
-document.getElementById('shareBtn').addEventListener('click', async () => {
-  if (!sharesComplete()) {
-    state.shares = Math.min(SHARE_GOAL, state.shares + 1);
-    localStorage.setItem('eb_shares', state.shares);
-  }
-  setShareProgress();
-  setProgress();
+document.getElementById('shareBtn').addEventListener('click', () => {
+  // Share synchronously first, while the browser still counts this as a user gesture
   if (navigator.share) {
-    try { await navigator.share({ title: 'EduBoost — Free Exam Prep', text: SHARE_TEXT }); } catch(e){}
+    navigator.share({ title: 'EduBoost — Free Exam Prep', text: SHARE_TEXT }).catch(() => {});
   } else {
     window.open('https://wa.me/?text=' + encodeURIComponent(SHARE_TEXT), '_blank', 'noopener');
   }
+  recordShare();
 });
+
+async function recordShare() {
+  try {
+    const r = await fetch('/api/share-click', { method: 'POST' });
+    if (r.ok) {
+      applyTasks(await r.json());
+      setShareProgress();
+      setProgress();
+    }
+  } catch (e) { /* offline: the click still opened the share sheet */ }
+}
 
 async function loadTestimonials() {
   try {
@@ -149,6 +173,6 @@ function esc(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&l
 
 // init
 setShareProgress();
-setProgress();
+syncTasks().then(() => { setShareProgress(); setProgress(); });
 refreshStats(); loadTestimonials();
 setInterval(refreshStats, 15000);

@@ -21,6 +21,13 @@
   .note { font-size: .85rem; color: #666; }
   .back { display: inline-block; margin-bottom: 14px; color: #ffd700; text-decoration: none; font-size: .9rem; font-weight: bold; }
   .footer { text-align: center; font-size: .78rem; color: #cfd8d3; margin: 8px 0 20px; }
+  button.btn { border: 0; cursor: pointer; font-family: inherit; }
+  .task { border: 1px solid #e0e0e0; border-radius: 10px; padding: 12px; margin-bottom: 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+  .task.done { border-color: #008751; background: #f3fbf6; }
+  .task-text { flex: 1 1 60%; font-size: .92rem; color: #222; }
+  .task b { color: #0b3d2e; }
+  .bar-track { flex: 0 0 100%; height: 10px; background: #e7ebe9; border-radius: 6px; overflow: hidden; margin-top: 4px; }
+  .bar-fill { height: 100%; background: linear-gradient(90deg, #008751, #39b54a); transition: width .3s; }
 </style>
 </head>
 <body>

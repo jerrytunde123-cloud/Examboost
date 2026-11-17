@@ -15,6 +15,7 @@ const { pool, init, query } = require('./db');
 
 const app = express();
 const MAX_REWARD_FILES = 30;
+const SHARE_GOAL = 5;
 const UPLOAD_DIR = path.join(__dirname, 'uploads');
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const USE_BLOB = !!process.env.BLOB_READ_WRITE_TOKEN;
@@ -153,10 +154,30 @@ app.get('/api/stats', ah(async (req, res) => {
 /* ---------- RECORD REAL JOIN CLICK ---------- */
 app.post('/api/join-click', ah(async (req, res) => {
   const { source } = req.body;
+  const tasks = req.session.tasks || (req.session.tasks = { joined: false, shares: 0 });
+  tasks.joined = true;
   await query('INSERT INTO join_clicks (source) VALUES ($1)', [source || 'unknown']);
   await query("UPDATE stats SET value = value + 1 WHERE key IN ('week_joins','total_joins')");
-  res.json({ ok: true });
+  res.json({ ok: true, ...unlockState(req) });
 }));
+
+/* ---------- TASK PROGRESS: join + 5 shares unlock the content ---------- */
+function unlockState(req) {
+  const tasks = req.session.tasks || {};
+  const shares = Math.min(SHARE_GOAL, Number(tasks.shares) || 0);
+  const joined = !!tasks.joined;
+  return { joined, shares, needed: SHARE_GOAL, unlocked: joined && shares >= SHARE_GOAL };
+}
+
+app.post('/api/share-click', (req, res) => {
+  const tasks = req.session.tasks || (req.session.tasks = { joined: false, shares: 0 });
+  tasks.shares = Math.min(SHARE_GOAL, (Number(tasks.shares) || 0) + 1);
+  res.json(unlockState(req));
+});
+
+app.get('/api/unlock', (req, res) => {
+  res.json(req.session.admin ? { ...unlockState(req), unlocked: true, admin: true } : unlockState(req));
+});
 
 /* ---------- TESTIMONIALS ---------- */
 app.get('/api/testimonials', ah(async (req, res) => {
@@ -192,6 +213,20 @@ app.get('/api/rewards', ah(async (req, res) => {
 app.get('/api/rewards/:slug', ah(async (req, res) => {
   const { rows } = await query('SELECT * FROM rewards WHERE slug=$1 AND active=1', [req.params.slug]);
   if (!rows.length) return res.status(404).json({ error: 'Not found' });
+
+  const state = unlockState(req);
+  if (!state.unlocked && !req.session.admin) {
+    // Locked: send the title only so the page can name what is waiting,
+    // never the description, files or external link.
+    return res.status(403).json({
+      error: 'locked',
+      title: rows[0].title,
+      exam: rows[0].exam,
+      files: withImages(rows[0]).images.length,
+      ...state
+    });
+  }
+
   res.json(withImages(rows[0]));
 }));
 

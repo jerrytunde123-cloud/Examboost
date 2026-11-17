@@ -26,9 +26,12 @@ node server.js
 1. Admin uploads a reward (title, description, exam, up to 30 files).
 2. A slug is generated from the title (`necogce-maths`) and is editable.
 3. `/api/rewards` lists **titles only** — no files, no description.
-4. The visitor joins the channel, shares the page 5 times, then sees the list.
-5. Clicking an item opens `/<slug>`, which loads the full description and files
-   from `/api/rewards/<slug>`.
+4. The visitor joins the channel and shares the page 5 times. Progress is stored
+   in their session **on the server**, not just the browser.
+5. Only then does `/api/rewards/<slug>` return the description and files.
+6. Clicking an item opens `/<slug>`, which shows the same two tasks to anyone who
+   opens that link directly — so a shared permalink is not a back door.
+7. Logged-in admins bypass the gate so they can check their own uploads.
 
 ## Environment variables
 
