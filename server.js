@@ -1,4 +1,8 @@
-require('dotenv').config({ path: require('path').join(__dirname, '.env') });
+const dotenv = require('dotenv');
+// .env.local is what `vercel env pull` writes; .env is the fallback for local use
+for (const file of ['.env.local', '.env']) {
+  dotenv.config({ path: require('path').join(__dirname, file) });
+}
 
 const express = require('express');
 const session = require('express-session');
@@ -33,6 +37,24 @@ app.use(session({
     secure: !!process.env.VERCEL,
     maxAge: 1000 * 60 * 60 * 8
   }
+}));
+
+/* ---------- HEALTH CHECK: tells you which piece is missing ---------- */
+app.get('/api/health', ah(async (req, res) => {
+  const out = {
+    on_vercel: !!process.env.VERCEL,
+    database_url: !!process.env.DATABASE_URL,
+    blob_token: !!process.env.BLOB_READ_WRITE_TOKEN,
+    session_secret: !!process.env.SESSION_SECRET,
+    db_reachable: false
+  };
+  try {
+    await query('SELECT 1');
+    out.db_reachable = true;
+  } catch (e) {
+    out.db_error = e.message;
+  }
+  res.status(out.db_reachable ? 200 : 503).json(out);
 }));
 
 // Ensures tables exist before the first request on a cold start

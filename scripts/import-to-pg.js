@@ -4,12 +4,18 @@
  * Requires DATABASE_URL in .env. If BLOB_READ_WRITE_TOKEN is set, local uploads
  * are pushed to Vercel Blob and their URLs are rewritten.
  */
-require('dotenv').config();
-const fs = require('fs');
 const path = require('path');
+const fs = require('fs');
+const dotenv = require('dotenv');
 const { DatabaseSync } = require('node:sqlite');
 
 const ROOT = path.join(__dirname, '..');
+
+// .env.local is what `vercel env pull` writes; .env is the local fallback
+for (const file of ['.env.local', '.env']) {
+  dotenv.config({ path: path.join(ROOT, file) });
+}
+
 const SQLITE_FILE = path.join(ROOT, 'edu.db');
 
 async function main() {

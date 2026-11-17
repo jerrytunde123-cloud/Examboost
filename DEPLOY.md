@@ -69,23 +69,49 @@ page should load with the yellow banner and the content list.
 ## 5. Move your existing content into Postgres
 
 Your old data lives in `edu.db` (SQLite) plus the images in `uploads/`. Run the
-one-time migration from your computer:
+one-time migration from your computer. `vercel` is not installed globally on this
+machine, so call it through `npx.cmd` (`npm.ps1` is blocked by the PowerShell
+execution policy here):
 
 ```powershell
 cd "C:\Users\KIMG JAY\Documents\Default Project\Examboost"
 
-# pull the deployed env vars into .env
-vercel link
-vercel env pull .env.local
+# 1. log in (opens the browser once)
+npx.cmd vercel@latest login
 
-# import: copies stats, testimonials, rewards and pushes images to Blob
+# 2. link this folder to the examboost project
+npx.cmd vercel@latest link
+
+# 3. pull the deployed env vars into .env.local
+npx.cmd vercel@latest env pull .env.local
+
+# 4. import: copies stats, testimonials, rewards and pushes images to Blob
 npm.cmd run import
 ```
+
+The app and the import script both read `.env.local` first, then `.env`, so no
+renaming is needed.
+
+If `npx` also fails, do it by hand: create `.env.local` in the project root with
+the same three lines as `.env.example`, taking `DATABASE_URL` from the Neon
+console and `BLOB_READ_WRITE_TOKEN` from the Blob store page in Vercel.
 
 The script prints one line per reward and per uploaded file. Afterwards every
 `/uploads/...` path in the database becomes a `https://....public.blob.vercel-storage.com/...` URL.
 
 **Run it once.** Running it twice copies the rewards again as duplicates.
+
+### Check what is missing at any time
+
+`https://<your-domain>/api/health` returns which pieces are wired up:
+
+```json
+{ "on_vercel": true, "database_url": true, "blob_token": true,
+  "session_secret": true, "db_reachable": true }
+```
+
+If `db_reachable` is false it also includes `db_error` with the reason. This
+endpoint never throws, so it keeps working even while the rest of the site is down.
 
 ---
 
