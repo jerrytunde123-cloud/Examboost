@@ -95,31 +95,83 @@ async function loadTestimonials() {
 }
 
 /* ---------- UPLOAD (up to 30 files) ---------- */
+/* A single request body is capped at 4.5 MB on Vercel, so files are sent in
+   batches that stay safely under it. Each batch goes to the same endpoints. */
+const MAX_BATCH_BYTES = 3.5 * 1024 * 1024;
+const MAX_BATCH_FILES = 6;
+
+function batchFiles(files) {
+  const batches = [];
+  let cur = [], bytes = 0;
+  for (const f of files) {
+    if (cur.length && (bytes + f.size > MAX_BATCH_BYTES || cur.length >= MAX_BATCH_FILES)) {
+      batches.push(cur); cur = []; bytes = 0;
+    }
+    cur.push(f); bytes += f.size;
+  }
+  if (cur.length) batches.push(cur);
+  return batches;
+}
+
+async function postFiles(url, fields, files) {
+  const fd = new FormData();
+  for (const k of Object.keys(fields || {})) fd.append(k, fields[k]);
+  (files || []).forEach(f => fd.append('files', f));
+  const r = await fetch(url, { method: 'POST', body: fd });
+  let json = {};
+  try { json = await r.json(); } catch (e) {}
+  return { ok: r.ok, json, status: r.status };
+}
+
+function uploadErrorText(r) {
+  if (r.json && r.json.error) return r.json.error;
+  if (r.status === 413) return 'the file(s) are too large to upload in one request.';
+  return 'server returned ' + r.status + '.';
+}
+
 $('uploadRewardBtn').addEventListener('click', async () => {
   const title = $('rTitle').value.trim();
   if (!title) { $('rMsg').textContent = 'Title is required.'; return; }
   const files = Array.from($('rFile').files || []);
   if (files.length > MAX_FILES) { $('rMsg').textContent = `Too many files — ${MAX_FILES} maximum.`; return; }
 
-  const fd = new FormData();
-  fd.append('title', title);
-  fd.append('description', $('rDesc').value);
-  fd.append('exam', $('rExam').value);
-  fd.append('link', $('rLink').value);
-  files.forEach(f => fd.append('files', f));
+  const meta = {
+    title,
+    description: $('rDesc').value,
+    exam: $('rExam').value,
+    link: $('rLink').value
+  };
+  const batches = batchFiles(files);
 
   $('rMsg').textContent = files.length ? `Uploading ${files.length} file(s)…` : 'Saving…';
-  const r = await fetch('/api/admin/rewards', { method:'POST', body: fd });
-  if (r.ok) {
-    const j = await r.json();
-    $('rMsg').textContent = `✅ Uploaded with ${j.images.length} file(s).`;
-    $('rTitle').value = $('rDesc').value = $('rLink').value = '';
-    $('rFile').value = '';
-    loadRewards();
-  } else {
-    const j = await r.json().catch(() => ({}));
-    $('rMsg').textContent = 'Upload failed. ' + (j.error || '');
+
+  const first = batches.length
+    ? await postFiles('/api/admin/rewards', meta, batches[0])
+    : await postFiles('/api/admin/rewards', meta, []);
+
+  if (!first.ok) {
+    $('rMsg').textContent = 'Upload failed — ' + uploadErrorText(first);
+    return;
   }
+
+  const created = first.json;
+  let count = (created.images || []).length;
+  let failed = 0;
+
+  for (let i = 1; i < batches.length; i++) {
+    $('rMsg').textContent = `Uploading files… ${count}/${files.length}`;
+    const r = await postFiles('/api/admin/rewards/' + created.id + '/images', {}, batches[i]);
+    if (r.ok) count = (r.json.images || []).length;
+    else failed += batches[i].length;
+  }
+
+  $('rMsg').textContent = failed
+    ? `⚠️ Saved, but ${failed} file(s) could not be uploaded. Open "Edit" to add them again.`
+    : `✅ Uploaded with ${count} file(s).`;
+
+  $('rTitle').value = $('rDesc').value = $('rLink').value = '';
+  $('rFile').value = '';
+  loadRewards();
 });
 
 /* ---------- MODAL ---------- */
@@ -200,10 +252,14 @@ function editReward(id) {
 
     const files = Array.from($('eFiles').files || []);
     if (files.length) {
-      const fd = new FormData();
-      files.forEach(f => fd.append('files', f));
-      const up = await fetch('/api/admin/rewards/' + id + '/images', { method: 'POST', body: fd });
-      if (!up.ok) { $('modalMsg').textContent = 'Saved, but file upload failed.'; loadRewards(); return; }
+      let count = (x.images || []).length;
+      const batches = batchFiles(files);
+      for (let i = 0; i < batches.length; i++) {
+        if (batches.length > 1) $('modalMsg').textContent = `Uploading files… ${count}/${count + files.length}`;
+        const up = await postFiles('/api/admin/rewards/' + id + '/images', {}, batches[i]);
+        if (!up.ok) { $('modalMsg').textContent = 'Saved, but file upload failed — ' + uploadErrorText(up); loadRewards(); return; }
+        count = (up.json.images || []).length;
+      }
     }
 
     if (!put.ok) { $('modalMsg').textContent = 'Save failed.'; return; }

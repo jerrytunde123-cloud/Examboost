@@ -13,6 +13,7 @@ uploads/
 # environment / secrets
 .env
 .env.*
+!.env.example
 
 # logs and OS clutter
 *.log
