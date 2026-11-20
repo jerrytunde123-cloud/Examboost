@@ -1,6 +1,12 @@
 const WA_CHANNEL_URL = 'https://whatsapp.com/channel/0029VbDKKpk6LwHkzWvLyk3e';
 const SHARE_GOAL = 5; // shares needed before the "Share" step counts as done
 
+// Set when a shared permalink sent the visitor here to do the tasks
+const params = new URLSearchParams(location.search);
+const unlockSlug = params.get('unlock');
+const unlockExpired = params.get('expired') === '1';
+let reopening = false;
+
 const state = {
   joined: false,
   shares: 0
@@ -53,7 +59,16 @@ function setProgress() {
     ? `Joined ✓ — now share ${SHARE_GOAL} times to unlock`
     : `Shared ✓ — now join to unlock`;
   else if (pct === 80) txt.textContent = 'Almost there…';
-  else { txt.textContent = '✅ All steps complete — reward unlocked!'; loadRewards(); }
+  else {
+    txt.textContent = unlockSlug
+      ? '✅ All steps complete — opening your content…'
+      : '✅ All steps complete — reward unlocked!';
+    loadRewards();
+    if (unlockSlug && !reopening) {
+      reopening = true;
+      setTimeout(() => location.replace('/' + encodeURIComponent(unlockSlug)), 700);
+    }
+  }
 }
 
 async function refreshStats() {
@@ -103,13 +118,21 @@ const SHARE_TEXT = [
   'Join our channel for weekly free giveaway(#50k) & challenges'
 ].join('\n');
 
+/* Always open WhatsApp directly — the native share sheet frequently has no
+   WhatsApp entry, which is why "Share with Classmates" felt like it did nothing. */
+function openWhatsAppShare(text) {
+  const url = 'https://wa.me/?text=' + encodeURIComponent(text);
+  const a = document.createElement('a');
+  a.href = url;
+  a.target = '_blank';
+  a.rel = 'noopener';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
 document.getElementById('shareBtn').addEventListener('click', () => {
-  // Share synchronously first, while the browser still counts this as a user gesture
-  if (navigator.share) {
-    navigator.share({ title: 'EduBoost — Free Exam Prep', text: SHARE_TEXT }).catch(() => {});
-  } else {
-    window.open('https://wa.me/?text=' + encodeURIComponent(SHARE_TEXT), '_blank', 'noopener');
-  }
+  openWhatsAppShare(SHARE_TEXT);
   recordShare();
 });
 
@@ -171,8 +194,32 @@ document.getElementById('submitTestimonial').addEventListener('click', async () 
 
 function esc(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
+async function showUnlockNotice() {
+  if (!unlockSlug) return;
+  let title = '';
+  try {
+    const list = await (await fetch('/api/rewards')).json();
+    const item = Array.isArray(list) ? list.find(x => x.slug === unlockSlug) : null;
+    if (!item) return; // content removed — nothing to explain
+    title = item.title;
+  } catch (e) { return; }
+
+  const box = document.createElement('div');
+  box.className = 'unlock-notice';
+  box.innerHTML =
+    '<b>🔒 ' + esc(title) + ' is locked</b>' +
+    '<span>Join the channel and share this page 5 times — the content opens by itself.</span>' +
+    (unlockExpired ? '<span class="unlock-expired">⏰ Your previous access expired, so the steps are needed again.</span>' : '');
+  const anchor = document.getElementById('rewardContent');
+  anchor.parentNode.insertBefore(box, anchor);
+}
+
 // init
 setShareProgress();
-syncTasks().then(() => { setShareProgress(); setProgress(); });
+syncTasks().then(() => {
+  setShareProgress();
+  setProgress();
+  if (unlockSlug && !(state.joined && sharesComplete())) showUnlockNotice();
+});
 refreshStats(); loadTestimonials();
 setInterval(refreshStats, 15000);

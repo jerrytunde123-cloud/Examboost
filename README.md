@@ -29,9 +29,14 @@ node server.js
 4. The visitor joins the channel and shares the page 5 times. Progress is stored
    in their session **on the server**, not just the browser.
 5. Only then does `/api/rewards/<slug>` return the description and files.
-6. Clicking an item opens `/<slug>`, which shows the same two tasks to anyone who
-   opens that link directly — so a shared permalink is not a back door.
-7. Logged-in admins bypass the gate so they can check their own uploads.
+6. A shared `/<slug>` link is not a back door: the server redirects strangers to
+   `/?unlock=<slug>`. The homepage says "… is locked" and shows the two steps;
+   when both are done it returns to `/<slug>` automatically.
+7. Access lasts 24 hours (`TASK_TTL_MS`), then the steps are required again.
+8. Admins can check their own uploads with `/<slug>?preview=1` while logged in —
+   the plain link stays gated even for them.
+9. "Share with Classmates" opens `wa.me` directly so the message can be sent to
+   groups and chats; the native share sheet often has no WhatsApp entry.
 
 ## Environment variables
 

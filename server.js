@@ -203,7 +203,7 @@ app.post('/api/share-click', (req, res) => {
 });
 
 app.get('/api/unlock', (req, res) => {
-  res.json(req.session.admin ? { ...unlockState(req), unlocked: true, admin: true } : unlockState(req));
+  res.json(adminPreview(req) ? { ...unlockState(req), unlocked: true, admin: true } : unlockState(req));
 });
 
 /* ---------- TESTIMONIALS ---------- */
@@ -242,7 +242,7 @@ app.get('/api/rewards/:slug', ah(async (req, res) => {
   if (!rows.length) return res.status(404).json({ error: 'Not found' });
 
   const state = unlockState(req);
-  if (!state.unlocked && !req.session.admin) {
+  if (!state.unlocked && !adminPreview(req)) {
     // Locked: send the title only so the page can name what is waiting,
     // never the description, files or external link.
     return res.status(403).json({
@@ -416,6 +416,10 @@ app.get('/api/admin/stats', requireAdmin, ah(async (req, res) => {
 }));
 
 /* ---------- PUBLIC PERMALINK PAGE: domain.com/necogce-maths ---------- */
+/* Admins can look at their own uploads with ?preview=1 while logged in. */
+function adminPreview(req) {
+  return !!(req.session.admin && req.query.preview === '1');
+}
 const PERMALINK_SHELL = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Loading… — EduBoost</title>
 <style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Segoe UI',Arial,sans-serif;background:#0b3d2e;color:#fff;min-height:100vh}
@@ -435,8 +439,18 @@ h1{font-size:1.25rem;color:#0b3d2e;margin-bottom:6px;line-height:1.35}.exam{disp
 app.get('/:slug', ah(async (req, res, next) => {
   const slug = req.params.slug;
   if (!/^[a-z0-9-]{1,80}$/.test(slug)) return next();
+
   const { rows } = await query('SELECT id FROM rewards WHERE slug=$1 AND active=1', [slug]);
   if (!rows.length) return next();
+
+  // A shared link is not a back door: send visitors to the homepage to
+  // complete the tasks, then they come back here automatically.
+  const state = unlockState(req);
+  if (!state.unlocked && !adminPreview(req)) {
+    const query = '/?unlock=' + encodeURIComponent(slug) + (state.expired ? '&expired=1' : '');
+    return res.redirect(302, query);
+  }
+
   const file = path.join(PUBLIC_DIR, 'reward.html');
   if (fs.existsSync(file)) return res.sendFile(file);
   res.type('html').send(PERMALINK_SHELL);

@@ -24,6 +24,19 @@ async function trackDownload() {
 }
 window.trackDownload = trackDownload;
 
+/* Straight to WhatsApp, where the message can be sent to groups, friends
+   and chats. The native share sheet often lists nothing useful. */
+function openWhatsAppShare(text) {
+  const url = 'https://wa.me/?text=' + encodeURIComponent(text);
+  const a = document.createElement('a');
+  a.href = url;
+  a.target = '_blank';
+  a.rel = 'noopener';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
 function render(item) {
   document.title = item.title + ' — EduBoost';
   const box = document.getElementById('content');
@@ -93,7 +106,8 @@ function renderGate(box, s) {
 
     <p class="note" id="gateMsg"></p>
     <p class="note" style="margin-top:8px;">Access lasts ${hours} hours, then the steps are required again.</p>
-    <p style="margin-top:14px;"><a class="back" href="/">← See all available content</a></p>
+    <p style="margin-top:14px;"><a class="btn" href="/?unlock=${encodeURIComponent(slug)}">Go to the homepage to unlock →</a></p>
+    <p style="margin-top:6px;"><a class="back" href="/">← See all available content</a></p>
   `;
 
   const msg = document.getElementById('gateMsg');
@@ -117,12 +131,7 @@ function renderGate(box, s) {
 
   const shareBtn = document.getElementById('gateShareBtn');
   if (shareBtn) shareBtn.addEventListener('click', () => {
-    // Share first, synchronously, so the browser still sees a user gesture
-    if (navigator.share) {
-      navigator.share({ title: 'EduBoost — Free Exam Prep', text: SHARE_TEXT }).catch(() => {});
-    } else {
-      window.open('https://wa.me/?text=' + encodeURIComponent(SHARE_TEXT), '_blank', 'noopener');
-    }
+    openWhatsAppShare(SHARE_TEXT);
     recordShare();
   });
 }
@@ -156,8 +165,9 @@ function applyState(s) {
 /* ---------- LOAD ---------- */
 async function load() {
   const box = document.getElementById('content');
+  const preview = new URLSearchParams(location.search).get('preview') === '1' ? '?preview=1' : '';
   try {
-    const r = await fetch('/api/rewards/' + encodeURIComponent(slug));
+    const r = await fetch('/api/rewards/' + encodeURIComponent(slug) + preview);
     if (r.status === 403) return applyState(await r.json());
     if (!r.ok) {
       box.innerHTML = `<h1>Content not found</h1><p class="note">This link may have been removed or the title was changed.</p>
