@@ -151,26 +151,53 @@ app.get('/api/stats', ah(async (req, res) => {
   });
 }));
 
-/* ---------- RECORD REAL JOIN CLICK ---------- */
+/* ---------- TASK PROGRESS: join + 5 shares unlock the content ---------- */
+/* Access is granted for 24 hours, then the visitor must join and share again. */
+const TASK_TTL_MS = Number(process.env.TASK_TTL_MS) || 24 * 60 * 60 * 1000;
+
+// Read-only: never creates a session, and treats stale tasks as empty
+function readTasks(req) {
+  const t = req.session.tasks;
+  if (!t || typeof t.at !== 'number') return { joined: false, shares: 0, expired: false };
+  if (Date.now() - t.at > TASK_TTL_MS) return { joined: false, shares: 0, expired: true };
+  return { joined: !!t.joined, shares: Math.min(SHARE_GOAL, Number(t.shares) || 0), expired: false, at: t.at };
+}
+
+// Writable: starts a fresh 24h window when the old one has run out
+function writableTasks(req) {
+  const t = readTasks(req);
+  if (t.expired || !req.session.tasks) {
+    req.session.tasks = { joined: false, shares: 0, at: Date.now() };
+  }
+  req.session.tasks.at = Date.now();
+  return req.session.tasks;
+}
+
+function unlockState(req) {
+  const tasks = readTasks(req);
+  const unlocked = tasks.joined && tasks.shares >= SHARE_GOAL;
+  return {
+    joined: tasks.joined,
+    shares: tasks.shares,
+    needed: SHARE_GOAL,
+    unlocked,
+    expired: !!tasks.expired,
+    ttl_hours: Math.round(TASK_TTL_MS / 3600000),
+    expires_at: unlocked ? new Date((tasks.at || Date.now()) + TASK_TTL_MS).toISOString() : null
+  };
+}
+
 app.post('/api/join-click', ah(async (req, res) => {
   const { source } = req.body;
-  const tasks = req.session.tasks || (req.session.tasks = { joined: false, shares: 0 });
+  const tasks = writableTasks(req);
   tasks.joined = true;
   await query('INSERT INTO join_clicks (source) VALUES ($1)', [source || 'unknown']);
   await query("UPDATE stats SET value = value + 1 WHERE key IN ('week_joins','total_joins')");
   res.json({ ok: true, ...unlockState(req) });
 }));
 
-/* ---------- TASK PROGRESS: join + 5 shares unlock the content ---------- */
-function unlockState(req) {
-  const tasks = req.session.tasks || {};
-  const shares = Math.min(SHARE_GOAL, Number(tasks.shares) || 0);
-  const joined = !!tasks.joined;
-  return { joined, shares, needed: SHARE_GOAL, unlocked: joined && shares >= SHARE_GOAL };
-}
-
 app.post('/api/share-click', (req, res) => {
-  const tasks = req.session.tasks || (req.session.tasks = { joined: false, shares: 0 });
+  const tasks = writableTasks(req);
   tasks.shares = Math.min(SHARE_GOAL, (Number(tasks.shares) || 0) + 1);
   res.json(unlockState(req));
 });

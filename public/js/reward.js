@@ -48,16 +48,26 @@ function percent(shares) {
   return Math.round((Math.min(Number(shares) || 0, SHARE_GOAL) / SHARE_GOAL) * 100);
 }
 
+// The join/share endpoints return progress only, so remember what is being
+// unlocked — otherwise the card loses its title after every click.
+let gateInfo = { title: '', exam: null, files: 0 };
+
 function renderGate(box, s) {
+  if (s.title) gateInfo.title = s.title;
+  if (s.exam !== undefined) gateInfo.exam = s.exam;
+  if (s.files) gateInfo.files = s.files;
+
   const pct = percent(s.shares);
-  document.title = 'Unlock ' + (s.title || 'this content') + ' — EduBoost';
+  const hours = s.ttl_hours || 24;
+  document.title = 'Unlock ' + (gateInfo.title || 'this content') + ' — EduBoost';
 
   box.innerHTML = `
     <h1>🔒 This content is locked</h1>
+    ${s.expired ? '<p class="expired">⏰ Your previous access has expired — complete the steps again to reopen it.</p>' : ''}
     <p class="desc" style="margin-bottom:6px;">
-      <b>${esc(s.title || 'This material')}</b>
-      ${s.exam ? `<span class="exam">${esc(s.exam)}</span>` : ''}
-      ${s.files ? `<span class="note">${s.files} file${s.files > 1 ? 's' : ''}</span>` : ''}
+      <b>${esc(gateInfo.title || 'This material')}</b>
+      ${gateInfo.exam ? `<span class="exam">${esc(gateInfo.exam)}</span>` : ''}
+      ${gateInfo.files ? `<span class="note">${gateInfo.files} file${gateInfo.files > 1 ? 's' : ''}</span>` : ''}
     </p>
     <p class="note" style="margin-bottom:16px;">
       Complete both steps below to open it — it takes less than a minute.
@@ -82,6 +92,7 @@ function renderGate(box, s) {
     </div>
 
     <p class="note" id="gateMsg"></p>
+    <p class="note" style="margin-top:8px;">Access lasts ${hours} hours, then the steps are required again.</p>
     <p style="margin-top:14px;"><a class="back" href="/">← See all available content</a></p>
   `;
 
@@ -119,7 +130,21 @@ function renderGate(box, s) {
 async function recordShare() {
   try {
     const r = await fetch('/api/share-click', { method: 'POST' });
-    if (r.ok) applyState(await r.json());
+    if (!r.ok) return;
+    const s = await r.json();
+
+    // If the browser is dropping the session cookie, progress would silently
+    // restart at 1 every click. Say so instead of looping forever.
+    try {
+      const check = await (await fetch('/api/unlock')).json();
+      if (!check.unlocked && check.shares !== s.shares) {
+        const msg = document.getElementById('gateMsg');
+        if (msg) msg.innerHTML = '⚠️ This browser is not keeping your progress. Open the link in Chrome or Safari (not a private tab) and try again.';
+        return;
+      }
+    } catch (e) {}
+
+    applyState(s);
   } catch (e) {}
 }
 
