@@ -172,23 +172,18 @@ document.getElementById('shareBtn').addEventListener('click', () => {
   startShareCountdown();
 });
 
+/* The share only counts after the delay. The button is locked meanwhile, but
+   no timer is shown — visitors just see the normal button. */
 function startShareCountdown() {
   shareBusy = true;
   const btn = document.getElementById('shareBtn');
-  if (!btn.dataset.label) btn.dataset.label = btn.textContent;
   btn.disabled = true;
-  let left = SHARE_DELAY;
-  btn.textContent = `↗ Sharing… ${left}s`;
 
-  const tick = setInterval(() => {
-    left -= 1;
-    if (left > 0) { btn.textContent = `↗ Sharing… ${left}s`; return; }
-    clearInterval(tick);
-    btn.textContent = btn.dataset.label;
+  setTimeout(() => {
     btn.disabled = false;
     shareBusy = false;
     recordShare();
-  }, 1000);
+  }, SHARE_DELAY * 1000);
 }
 
 async function recordShare() {

@@ -435,7 +435,7 @@ const PERMALINK_SHELL = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF
 <style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Segoe UI',Arial,sans-serif;background:#0b3d2e;color:#fff;min-height:100vh}
 .top-banner{background:#ffcc00;color:#000;text-align:center;padding:12px;font-weight:bold;font-size:.95rem;border-bottom:4px solid #000;overflow:hidden}
 .top-banner span{display:inline-block;white-space:nowrap;animation:eb-banner 20s linear infinite}
-@keyframes eb-banner{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
+@keyframes eb-banner{from{transform:translateX(100%)}to{transform:translateX(-100%)}}
 .container{max-width:540px;margin:0 auto;padding:20px}.card{background:#fff;color:#222;border-radius:14px;padding:22px;margin-bottom:18px;box-shadow:0 6px 20px rgba(0,0,0,.35)}
 h1{font-size:1.25rem;color:#0b3d2e;margin-bottom:6px;line-height:1.35}.exam{display:inline-block;background:#e8f5e9;color:#008751;font-size:.72rem;padding:3px 8px;border-radius:6px;font-weight:bold;margin-bottom:12px}
 .desc{font-size:.95rem;color:#333;white-space:pre-wrap;line-height:1.55;margin-bottom:14px}.gallery{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}

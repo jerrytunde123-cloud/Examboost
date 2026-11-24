@@ -165,21 +165,15 @@ function renderGate(box, s) {
   if (shareBtn) shareBtn.addEventListener('click', () => {
     if (shareBusy) return;
     openWhatsAppShare(SHARE_TEXT);
-    // The share only counts after the delay, so an instant click cannot claim it
+    // The share only counts after the delay, so an instant click cannot claim it.
+    // The button is locked meanwhile but no timer is shown to the visitor.
     shareBusy = true;
-    const label = shareBtn.textContent;
     shareBtn.disabled = true;
-    let left = 6;
-    shareBtn.textContent = `Sharing… ${left}s`;
-    const tick = setInterval(() => {
-      left -= 1;
-      if (left > 0) { shareBtn.textContent = `Sharing… ${left}s`; return; }
-      clearInterval(tick);
+    setTimeout(() => {
       shareBtn.disabled = false;
-      shareBtn.textContent = label;
       shareBusy = false;
       recordShare();
-    }, 1000);
+    }, 6000);
   });
 }
 

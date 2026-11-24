@@ -9,7 +9,7 @@
   body { font-family: 'Segoe UI', Arial, sans-serif; background: #0b3d2e; color: #fff; min-height: 100vh; }
   .top-banner { background: #ffcc00; color: #000; text-align: center; padding: 12px; font-weight: bold; font-size: .95rem; position: sticky; top: 0; z-index: 100; border-bottom: 4px solid #000; overflow: hidden; }
   .top-banner span { display: inline-block; white-space: nowrap; animation: eb-banner 20s linear infinite; will-change: transform; }
-  @keyframes eb-banner { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+  @keyframes eb-banner { from { transform: translateX(100%); } to { transform: translateX(-100%); } }
   @media (prefers-reduced-motion: reduce) { .top-banner span { animation: none; } }
   .container { max-width: 540px; margin: 0 auto; padding: 20px; }
   .cover { margin-bottom: 18px; border-radius: 14px; overflow: hidden; box-shadow: 0 6px 20px rgba(0,0,0,.45); }
@@ -23,6 +23,7 @@
   .counter-label { text-align: center; color: #555; font-size: .9rem; }
   .btn { width: 100%; padding: 15px; background: #008751; color: #fff; border: none; border-radius: 8px; font-size: 1.05rem; font-weight: bold; cursor: pointer; transition: transform .1s; }
   .btn:active { transform: scale(.98); }
+  .btn:disabled { opacity: .6; cursor: progress; }
   .btn-wa { background: #25D366; margin-top: 8px; }
   .btn-secondary { background: #0b3d2e; }
   .testimonial { background: #f9f9f9; border-left: 4px solid #008751; padding: 10px 12px; border-radius: 6px; margin: 10px 0; font-size: .9rem; color: #333; }
