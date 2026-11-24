@@ -16,6 +16,7 @@ const { pool, init, query } = require('./db');
 const app = express();
 const MAX_REWARD_FILES = 30;
 const SHARE_GOAL = 5;
+const SHARE_GAP_MS = Number(process.env.SHARE_GAP_MS) || 5000; // a share counts 5s after the previous one
 const UPLOAD_DIR = path.join(__dirname, 'uploads');
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const USE_BLOB = !!process.env.BLOB_READ_WRITE_TOKEN;
@@ -198,6 +199,15 @@ app.post('/api/join-click', ah(async (req, res) => {
 
 app.post('/api/share-click', (req, res) => {
   const tasks = writableTasks(req);
+  const now = Date.now();
+  const gapLeft = SHARE_GAP_MS - (now - (Number(tasks.lastShareAt) || 0));
+
+  // Stops scripted/instant fake shares: one share per 5 seconds.
+  if (gapLeft > 0) {
+    return res.status(429).json({ ...unlockState(req), error: 'too_fast', wait_ms: Math.ceil(gapLeft) });
+  }
+
+  tasks.lastShareAt = now;
   tasks.shares = Math.min(SHARE_GOAL, (Number(tasks.shares) || 0) + 1);
   res.json(unlockState(req));
 });
@@ -423,7 +433,9 @@ function adminPreview(req) {
 const PERMALINK_SHELL = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Loading… — EduBoost</title>
 <style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Segoe UI',Arial,sans-serif;background:#0b3d2e;color:#fff;min-height:100vh}
-.top-banner{background:#ffcc00;color:#000;text-align:center;padding:12px;font-weight:bold;font-size:.95rem;border-bottom:4px solid #000}
+.top-banner{background:#ffcc00;color:#000;text-align:center;padding:12px;font-weight:bold;font-size:.95rem;border-bottom:4px solid #000;overflow:hidden}
+.top-banner span{display:inline-block;white-space:nowrap;animation:eb-banner 20s linear infinite}
+@keyframes eb-banner{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
 .container{max-width:540px;margin:0 auto;padding:20px}.card{background:#fff;color:#222;border-radius:14px;padding:22px;margin-bottom:18px;box-shadow:0 6px 20px rgba(0,0,0,.35)}
 h1{font-size:1.25rem;color:#0b3d2e;margin-bottom:6px;line-height:1.35}.exam{display:inline-block;background:#e8f5e9;color:#008751;font-size:.72rem;padding:3px 8px;border-radius:6px;font-weight:bold;margin-bottom:12px}
 .desc{font-size:.95rem;color:#333;white-space:pre-wrap;line-height:1.55;margin-bottom:14px}.gallery{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
@@ -431,7 +443,7 @@ h1{font-size:1.25rem;color:#0b3d2e;margin-bottom:6px;line-height:1.35}.exam{disp
 .btn{display:inline-block;background:#008751;color:#fff;padding:11px 16px;border-radius:8px;text-decoration:none;font-weight:bold;font-size:.9rem;margin:0 8px 8px 0}
 .btn-ghost{background:#0b3d2e}.note{font-size:.85rem;color:#666}.back{display:inline-block;margin-bottom:14px;color:#ffd700;text-decoration:none;font-size:.9rem;font-weight:bold}
 .footer{text-align:center;font-size:.78rem;color:#cfd8d3;margin:8px 0 20px}</style></head><body>
-<div class="top-banner">🎓 FREE WAEC / NECO / JAMB PREP MATERIAL — 100% LEGITIMATE EDUCATIONAL SERVICE</div>
+<div class="top-banner"><span>🎓 FREE WAEC / NECO / JAMB QUESTIONS & PREP MATERIAL — 100% LEGITIMATE EDUCATIONAL SERVICE</span></div>
 <div class="container"><a class="back" href="/">← Back to all content</a><div class="card" id="content"><p class="note">Loading…</p></div>
 <p class="footer">EduBoost — real educational service. No payment required.</p></div>
 <script src="/js/reward.js"></script></body></html>`;

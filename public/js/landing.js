@@ -118,33 +118,93 @@ const SHARE_TEXT = [
   'Join our channel for weekly free giveaway(#50k) & challenges'
 ].join('\n');
 
-/* Always open WhatsApp directly — the native share sheet frequently has no
-   WhatsApp entry, which is why "Share with Classmates" felt like it did nothing. */
+/* ---------- SHARING ---------- */
+const SHARE_DELAY = 6; // seconds before a share is counted (server demands 5)
+let shareBusy = false;
+
+function toast(message, ms) {
+  let el = document.getElementById('ebToast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'ebToast';
+    document.body.appendChild(el);
+  }
+  el.textContent = message;
+  el.className = 'show';
+  clearTimeout(el._timer);
+  el._timer = setTimeout(() => { el.className = ''; }, ms || 7000);
+}
+
+/* WhatsApp's own protocol keeps the message; https://wa.me/ tends to drop it
+   and land on the app's home screen. The text is also copied as a safety net. */
 function openWhatsAppShare(text) {
-  const url = 'https://wa.me/?text=' + encodeURIComponent(text);
-  const a = document.createElement('a');
-  a.href = url;
-  a.target = '_blank';
-  a.rel = 'noopener';
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
+  const encoded = encodeURIComponent(text);
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(
+      () => toast('✅ Message copied — paste it in the chat if WhatsApp opens empty.'),
+      () => {}
+    );
+  }
+
+  if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+    location.href = 'whatsapp://send?text=' + encoded;
+    return;
+  }
+
+  const link = document.createElement('a');
+  link.href = 'whatsapp://send?text=' + encoded;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+
+  // No app answered? Open WhatsApp Web in a tab instead.
+  setTimeout(() => {
+    if (document.visibilityState === 'visible' && document.hasFocus()) {
+      window.open('https://web.whatsapp.com/send?text=' + encoded, '_blank', 'noopener');
+    }
+  }, 1500);
 }
 
 document.getElementById('shareBtn').addEventListener('click', () => {
+  if (shareBusy) return;
   openWhatsAppShare(SHARE_TEXT);
-  recordShare();
+  startShareCountdown();
 });
+
+function startShareCountdown() {
+  shareBusy = true;
+  const btn = document.getElementById('shareBtn');
+  if (!btn.dataset.label) btn.dataset.label = btn.textContent;
+  btn.disabled = true;
+  let left = SHARE_DELAY;
+  btn.textContent = `↗ Sharing… ${left}s`;
+
+  const tick = setInterval(() => {
+    left -= 1;
+    if (left > 0) { btn.textContent = `↗ Sharing… ${left}s`; return; }
+    clearInterval(tick);
+    btn.textContent = btn.dataset.label;
+    btn.disabled = false;
+    shareBusy = false;
+    recordShare();
+  }, 1000);
+}
 
 async function recordShare() {
   try {
     const r = await fetch('/api/share-click', { method: 'POST' });
+    if (r.status === 429) {
+      const j = await r.json().catch(() => ({}));
+      toast('⏳ Please wait ' + Math.ceil((j.wait_ms || 5000) / 1000) + 's before sharing again.');
+      return;
+    }
     if (r.ok) {
       applyTasks(await r.json());
       setShareProgress();
       setProgress();
     }
-  } catch (e) { /* offline: the click still opened the share sheet */ }
+  } catch (e) { /* offline: the share sheet still opened */ }
 }
 
 async function loadTestimonials() {
